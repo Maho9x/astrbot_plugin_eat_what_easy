@@ -1,0 +1,16 @@
+name: astrbot_plugin_eat_what_easy
+desc: 一个简单的关键词回复插件，随机回复「今天吃什么 / 喝什么」的菜品、饮品图片。
+help: 
+  【关键词触发】（默认开启）
+  - 发送含「吃什么」的消息 → 随机回复一张菜品图
+  - 发送含「喝什么」的消息 → 随机回复一张饮品图
+  - 支持时间词前缀：中午吃什么 / 明天晚上喝什么（时间关键词可在配置里增删）
+  【指令触发】（需在配置里开启「启用指令」）
+  - /eat ：吃点什么
+  - /drink ：喝点什么
+version: v1.0.0
+author: Maho9x
+repo: https://github.com/Maho9x/astrbot_plugin_eat_what_easy
+
+support_platforms:
+  - aiocqhttp

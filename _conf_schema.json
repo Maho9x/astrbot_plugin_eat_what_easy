@@ -1,0 +1,78 @@
+{
+    "useKeyword": {
+        "description": "对聊天中的关键字做出反应",
+        "type": "bool",
+        "hint": "开启后，聊天内容里包含「吃什么」/「喝什么」就会随机回一张图。",
+        "default": true
+    },
+    "useCommand": {
+        "description": "启用指令",
+        "type": "bool",
+        "hint": "开启后可使用 /eat（吃点什么）与 /drink（喝点什么）。",
+        "default": false
+    },
+    "useExtraFoods": {
+        "description": "启用额外食物图库",
+        "type": "bool",
+        "hint": "开启后把 assets/extra_foods 里的图片也加入抽取池。",
+        "default": false
+    },
+    "useExtraDrinks": {
+        "description": "启用额外饮料图库",
+        "type": "bool",
+        "hint": "开启后把 assets/extra_drinks 里的图片也加入抽取池。",
+        "default": false
+    },
+    "foodsKeyword": {
+        "description": "吃什么关键字",
+        "type": "list",
+        "hint": "可增删，命中任意一个即触发。",
+        "default": [
+            "吃什么"
+        ]
+    },
+    "drinksKeyword": {
+        "description": "喝什么关键字",
+        "type": "list",
+        "hint": "可增删，命中任意一个即触发。",
+        "default": [
+            "喝什么"
+        ]
+    },
+    "defaultTimeWord": {
+        "description": "默认时间词",
+        "type": "string",
+        "hint": "未匹配到任何时间关键词时使用，例如「今天」。",
+        "default": "今天"
+    },
+    "timeKeywords": {
+        "description": "可识别的时间关键词",
+        "type": "list",
+        "hint": "按前缀匹配，长词优先；例如发送「中午吃什么」会以「中午」开头回复。",
+        "default": [
+            "今天",
+            "早上",
+            "中午",
+            "下午",
+            "晚上",
+            "夜宵",
+            "明天",
+            "明天早上",
+            "明天中午",
+            "明天下午",
+            "明天晚上"
+        ]
+    },
+    "foodsTemplate": {
+        "description": "吃什么消息模板",
+        "type": "text",
+        "hint": "可用占位符：\n{{time}} → 时间词（如「中午」，由「可识别的时间关键词」匹配而来，未命中时取「默认时间词」）\n{{dishes}} → 菜名（即图片文件名，不含扩展名）\n{{image}} → 图片插入位置；不写这个标记时图片会附在文字最后\n支持换行；留空则使用默认模板。",
+        "default": "{{time}}吃{{dishes}}喵！"
+    },
+    "drinksTemplate": {
+        "description": "喝什么消息模板",
+        "type": "text",
+        "hint": "可用占位符：\n{{time}} → 时间词（如「中午」，由「可识别的时间关键词」匹配而来，未命中时取「默认时间词」）\n{{dishes}} → 菜名（即图片文件名，不含扩展名）\n{{image}} → 图片插入位置；不写这个标记时图片会附在文字最后\n支持换行；留空则使用默认模板。",
+        "default": "{{time}}吃{{dishes}}喵！"
+    }
+}
