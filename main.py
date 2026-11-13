@@ -19,6 +19,7 @@ from astrbot.api import AstrBotConfig, logger
 from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.message_components import At, Image, Plain
 from astrbot.api.star import Context, Star, register
+from astrbot.core.message.message_event_result import MessageChain
 
 PLUGIN_DIR = Path(__file__).resolve().parent
 ASSETS_DIR = PLUGIN_DIR / "assets"
@@ -49,6 +50,9 @@ IMAGE_MARKER = "{{image}}"
 
 TYPE_LABEL = {"foods": "食物", "drinks": "饮料"}
 
+# 零宽空格：respond 阶段会丢弃「strip() 后为空」的 Plain 段，用它保住 @ 那条消息
+ZERO_WIDTH = "\u200b"
+
 
 def _as_bool(value, default: bool = False) -> bool:
     if isinstance(value, bool):
@@ -60,11 +64,40 @@ def _as_bool(value, default: bool = False) -> bool:
     return bool(value)
 
 
+def _is_qq_official(event) -> bool:
+    """是否运行在 QQ 官方机器人适配器上。
+
+    注意：get_platform_id() 返回的是平台配置里的 id（用户可自定义，如「QQ官方bot」），
+    get_platform_name() 才是适配器名（qq_official）。所以这里三处都看，任一命中即可。
+    """
+    candidates: list[str] = []
+    for attr in ("get_platform_name", "get_platform_id"):
+        try:
+            getter = getattr(event, attr, None)
+            if callable(getter):
+                candidates.append(str(getter() or ""))
+        except Exception:  # noqa: BLE001
+            pass
+
+    meta = getattr(event, "platform_meta", None)
+    if meta is not None:
+        for attr in ("name", "description"):
+            try:
+                candidates.append(str(getattr(meta, attr, "") or ""))
+            except Exception:  # noqa: BLE001
+                pass
+
+    for value in candidates:
+        low = value.strip().lower()
+        if "qq_official" in low or "qqofficial" in low or "机器人官方" in value:
+            return True
+    return False
+
 @register(
     "astrbot_plugin_eat_what_easy",
     "Maho9x",
     "今天吃什么/喝什么，随机返回菜品图片",
-    "1.0.0",
+    "1.1.0",
 )
 class EatWhatPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
@@ -168,23 +201,50 @@ class EatWhatPlugin(Star):
             return before.rstrip(), after.lstrip()
         return body, ""
 
-    def _build_chain(self, event: AstrMessageEvent, kind: str, time_word: str):
+    async def _build_results(self, event: AstrMessageEvent, kind: str, time_word: str):
+        """产出 1~2 条消息。
+
+        QQ 官方 bot 在消息带图片时会改用 msg_type=7（纯文本 content），At 序列化出的
+        `<qqbot-at-user id="..." />` 不会被解析；纯 At 的消息链又会被 respond 阶段跳过。
+        开启 `qq_official_optimize` 时，用 event.send() 直接发两条：
+        先 markdown（msg_type=2）单独 @ 对方，再发「文案 + 图片」。
+        """
         user_id = str(event.get_sender_id() or "")
+        optimize = _as_bool(self._cfg("qq_official_optimize", False)) and _is_qq_official(event)
         picked = self._pick(kind, user_id)
+
         if picked is None:
             text = f"图库里没有找到任何{TYPE_LABEL.get(kind, '食物')}图片。"
-            return event.chain_result([At(qq=user_id), Plain(text)])
+            if optimize:
+                try:
+                    await event.send(MessageChain(chain=[At(qq=user_id), Plain(ZERO_WIDTH)]).use_markdown(True))
+                    await event.send(MessageChain(chain=[Plain(text)]))
+                    return
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning(f"QQ 官方 bot 拆条发送失败，回退为单条：{exc}")
+            yield event.chain_result([At(qq=user_id), Plain(text)])
+            return
 
         dishes = os.path.basename(picked).split(".")[0]
         before, after = self._render_template(self._template(kind), time_word, dishes)
 
-        chain = [At(qq=user_id)]
+        content = []
         if before:
-            chain.append(Plain(" " + before))
-        chain.append(Image.fromFileSystem(str(ASSETS_DIR / picked)))
+            content.append(Plain(" " + before))
+        content.append(Image.fromFileSystem(str(ASSETS_DIR / picked)))
         if after:
-            chain.append(Plain(after))
-        return event.chain_result(chain)
+            content.append(Plain(after))
+
+        if optimize and user_id:
+            try:
+                await event.send(MessageChain(chain=[At(qq=user_id), Plain(ZERO_WIDTH)]).use_markdown(True))
+                await event.send(MessageChain(chain=content))
+                logger.info("QQ 官方 bot 优化：@ 与图文拆分为两条发送")
+                return
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(f"QQ 官方 bot 拆条发送失败，回退为单条：{exc}")
+
+        yield event.chain_result([At(qq=user_id), *content])
 
     # ---------------- 事件处理 ----------------
     @filter.command("eat")
@@ -192,14 +252,16 @@ class EatWhatPlugin(Star):
         if not _as_bool(self._cfg("useCommand", False)):
             return
         event.stop_event()
-        yield self._build_chain(event, "foods", self._default_time_word())
+        async for result in self._build_results(event, "foods", self._default_time_word()):
+            yield result
 
     @filter.command("drink")
     async def drink_command(self, event: AstrMessageEvent):
         if not _as_bool(self._cfg("useCommand", False)):
             return
         event.stop_event()
-        yield self._build_chain(event, "drinks", self._default_time_word())
+        async for result in self._build_results(event, "drinks", self._default_time_word()):
+            yield result
 
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def keyword_handler(self, event: AstrMessageEvent):
@@ -215,10 +277,12 @@ class EatWhatPlugin(Star):
 
         if any(kw in text for kw in self.foods_keywords):
             event.stop_event()
-            yield self._build_chain(event, "foods", self._extract_time_word(text))
+            async for result in self._build_results(event, "foods", self._extract_time_word(text)):
+                yield result
         elif any(kw in text for kw in self.drinks_keywords):
             event.stop_event()
-            yield self._build_chain(event, "drinks", self._extract_time_word(text))
+            async for result in self._build_results(event, "drinks", self._extract_time_word(text)):
+                yield result
 
     async def terminate(self):
         self._history.clear()

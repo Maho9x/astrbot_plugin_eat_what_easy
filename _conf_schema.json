@@ -11,6 +11,12 @@
         "hint": "开启后可使用 /eat（吃点什么）与 /drink（喝点什么）。",
         "default": false
     },
+    "qq_official_optimize": {
+        "description": "对 QQ 官方 bot 优化",
+        "type": "bool",
+        "hint": "QQ 官方机器人 API 不支持把「@群员 + 图片 + 文字」放在同一条消息里，开启后会拆成两条：先单独 @ 对方（markdown 消息，QQ 才会渲染成真正的 @），再发「文案 + 图片」。\n仅在 QQ 官方机器人平台生效，其他平台不受影响。",
+        "default": false
+    },
     "useExtraFoods": {
         "description": "启用额外食物图库",
         "type": "bool",
