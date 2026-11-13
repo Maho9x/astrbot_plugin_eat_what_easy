@@ -19,3 +19,4 @@ tags:
   - 图片
 support_platforms:
   - aiocqhttp
+  - qq_official
